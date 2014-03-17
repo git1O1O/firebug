@@ -19,26 +19,15 @@
  *
  * @class
  */
-var MutationRecognizer = function(win, tagName, attributes, text, changedAttributes)
+var MutationRecognizer = function(config)
 {
-   this.win = win;
-   this.tagName = tagName;
-   this.attributes = attributes || {};
-   this.characterData = text;
-
-   this.changedAttributes = changedAttributes;
+    this.target = config.target;
+    this.mutationFilter = new MutationFilter(config);
 };
 
 MutationRecognizer.prototype.getDescription = function()
 {
-    var obj = {
-        tagName: this.tagName,
-        attributes: this.attributes,
-        characterData: this.characterData,
-        changedAttributes: this.changedAttributes,
-    };
-
-    return JSON.stringify(obj);
+    return mutationFilter.getDescription();
 };
 
 /**
@@ -48,7 +37,8 @@ MutationRecognizer.prototype.getDescription = function()
  */
 MutationRecognizer.prototype.onRecognize = function(handler)
 {
-    return new MutationEventFilter(this, handler);
+    this.mutationFilter.handler = handler;
+    return new MutationObserver(this.mutationFilter.filter);
 };
 
 /**
@@ -63,152 +53,32 @@ MutationRecognizer.prototype.onRecognizeAsync = function(handler, delay)
     if (!delay)
         delay = 10;
 
-    return new MutationEventFilter(this, function(element) {
-        setTimeout(function delayMutationEventFilter() {
-            FBTest.sysout("testFirebug.MutationEventFilter.onRecognizeAsync:", element);
-            handler(element);
+    this.mutationFilter.handler = function(node)
+    {
+        setTimeout(function delayMutationEventFilter()
+        {
+            FBTest.sysout("testFirebug.MutationEventFilter.onRecognizeAsync:", node);
+            handler(node);
         }, delay);
-    });
+    };
+
+    var observer = new MutationObserver(this.mutationFilter.filter);
+    var config = {};
+    if (this.mutationFilter.addedChildTag || this.mutationFilter.removedChildTag)
+    {
+        config.childList = true;
+        config.subtree = true;
+    }
+    else if (this.mutationFilter.changedAttribute)
+    {
+        config.attributes = true;
+        config.attributeFilter = [this.mutationFilter.changedAttribute];
+    }
+    else if (this.mutationFilter.characterData)
+    {
+        config.characterData = true;
+    }
+
+    FBTrace.sysout("this.target", {target: this.target, config: config});
+    observer.observe(this.target, config);
 };
-
-MutationRecognizer.prototype.getWindow = function()
-{
-    return this.win;
-};
-
-MutationRecognizer.prototype.matches = function(elt, event)
-{
-    // Note Text nodes have no tagName
-    if (this.tagName == "Text")
-    {
-        // The content must be exactly the same to avoid coincidental matches.
-        // Yet better way is to specify classes of the parent element (attributes).
-        if (elt.data && elt.data == this.characterData)
-        {
-            if (FBTrace.DBG_TESTCASE_MUTATION)
-                FBTrace.sysout("MutationRecognizer matches Text character data: " +
-                    this.characterData, elt.parentNode);
-
-            var parentNode = elt.parentNode;
-
-            // If a class is specified the parent of the text node must match.
-            if (this.attributes && this.attributes["class"] &&
-                !FW.FBL.hasClass.apply(FW.FBL, [parentNode, this.attributes["class"]]))
-            {
-                if (FBTrace.DBG_TESTCASE_MUTATION)
-                    FBTrace.sysout("MutationRecognizer no match for class " +
-                        this.attributes[p]+" vs "+eltP+" p==class: "+(p=='class') +
-                        " indexOf: "+eltP.indexOf(this.attributes[p]));
-                return null;
-            }
-
-            return parentNode;
-        }
-        else
-        {
-            if (FBTrace.DBG_TESTCASE_MUTATION)
-                FBTrace.sysout("MutationRecognizer no match in Text character data "+
-                    this.characterData+" vs "+elt.data,{element: elt, recogizer: this});
-            return null;
-        }
-    }
-
-    if (!(elt instanceof Element))
-    {
-        if (FBTrace.DBG_TESTCASE_MUTATION)
-            FBTrace.sysout("MutationRecognizer Node not an Element ", elt);
-        return null;
-    }
-
-    if (elt.tagName && (elt.tagName.toLowerCase() != this.tagName) )
-    {
-        if (FBTrace.DBG_TESTCASE_MUTATION)
-            FBTrace.sysout("MutationRecognizer no match on tagName "+this.tagName+
-                " vs "+elt.tagName.toLowerCase()+" "+FW.FBL.getElementCSSSelector(elt),
-                {element: elt, recogizer: this});
-        return null;
-    }
-
-    for (var p in this.attributes)
-    {
-        if (this.attributes.hasOwnProperty(p))
-        {
-            var eltP = elt.getAttribute(p);
-            if (!eltP)
-            {
-                if (FBTrace.DBG_TESTCASE_MUTATION)
-                    FBTrace.sysout("MutationRecognizer no attribute "+p+" in "+
-                        FW.FBL.getElementHTML(elt), {element: elt, recogizer: this});
-                return null;
-            }
-            if (this.attributes[p] != null)
-            {
-                if (p == 'class')
-                {
-                    if (!FW.FBL.hasClass.apply(FW.FBL, [elt, this.attributes[p]]))
-                    {
-                        if (FBTrace.DBG_TESTCASE_MUTATION)
-                            FBTrace.sysout("MutationRecognizer no match for class " +
-                                this.attributes[p]+" vs "+eltP+" p==class: "+(p=='class') +
-                                " indexOf: "+eltP.indexOf(this.attributes[p]));
-                        return null;
-                    }
-                }
-                else if (eltP != this.attributes[p])
-                {
-                    if (FBTrace.DBG_TESTCASE_MUTATION)
-                        FBTrace.sysout("MutationRecognizer no match for attribute "+p+": "+
-                            this.attributes[p]+" vs "+eltP,{element: elt, recogizer: this});
-                    return null;
-                }
-            }
-        }
-    }
-
-    if (this.characterData)
-    {
-        if (elt.textContent.indexOf(this.characterData) < 0)
-        {
-            if (FBTrace.DBG_TESTCASE_MUTATION)
-                FBTrace.sysout("MutationRecognizer no match for characterData "+
-                    this.characterData+" vs "+elt.textContent, {element: elt, recogizer: this});
-            return null;
-        }
-    }
-
-    // If the attribute name is 'class' and the value is specified, check
-    // that value has been removed
-    if (this.changedAttributes)
-    {
-        if (!this.changedAttributes[event.attrName])
-            return null;
-
-        var watchValue = this.changedAttributes[event.attrName];
-        if (!watchValue)
-            return null;
-
-        if (event.attrName != "class")
-            return null;
-
-        var result = diffString(event.prevValue, event.newValue);
-        result = removeWhitespaces(result);
-
-        var value = "<del>" + watchValue + "</del>";
-        if (result.indexOf(value) == -1)
-            return null;
-    }
-
-    // tagName and all attributes match
-    FBTest.sysout("MutationRecognizer tagName and all attributes match "+elt, elt);
-    return elt;
-};
-
-// ********************************************************************************************* //
-// Local Helpers
-
-function removeWhitespaces(value)
-{
-    return value.replace(/[\r\n\s]+/g, "");
-}
-
-// ********************************************************************************************* //
