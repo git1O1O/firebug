@@ -70,6 +70,8 @@ MutationFilter.prototype.filter = function(mutations)
         if (!mutatedNodes || mutatedNodes.length === 0)
             return null;
 
+        FBTrace.sysout("mutatedNodes", mutatedNodes);
+
         for (var i = 0; i < mutatedNodes.length; i++)
         {
             if (mutatedNodes[i].nodeType !== Node.ELEMENT_NODE)
@@ -123,6 +125,12 @@ MutationFilter.prototype.filter = function(mutations)
                 if (node)
                     return node;
                 else
+                    continue;
+            }
+
+            if (this.characterData)
+            {
+                if (mutatedNodes[i].textContent.indexOf(this.characterData) === -1)
                     continue;
             }
 
@@ -180,13 +188,12 @@ MutationFilter.prototype.filter = function(mutations)
  */
 MutationFilter.prototype.getMutationObserverConfig = function()
 {
-    var config = {};
-    if (this.addedChildTag || this.removedChildTag)
-    {
-        config.childList = true;
-        config.subtree = true;
-    }
-    else if (this.changedAttribute)
+    var config = {
+        childList: true,
+        subtree: true
+    };
+
+    if (this.changedAttribute)
     {
         config.attributes = true;
         config.attributeFilter = [this.changedAttribute];
