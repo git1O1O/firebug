@@ -1,12 +1,37 @@
 /* See license.txt for terms of usage */
 
 /**
- * This file defines MutationEventFilter APIs for test drivers.
+ * This file defines MutationFilter APIs for test drivers.
  */
 
 // ********************************************************************************************* //
 // Mutation Filter API
 
+/**
+ * Mutation filter element
+ * 
+ * @typedef {Object} MutationFilterElement
+ * @property {String} name - Tag name that will be searched for
+ * @property {Object} attributes - Name/value pairs of attributes that will be searched for
+ */
+
+/**
+ * Mutation filter config
+ * 
+ * @typedef {Object} MutationFilterConfig
+ * @property {Element} target - Element that will be observed
+ * @property {MutationFilterElement} [addedChildTag] - Added element the filter is searching for
+ * @property {MutationFilterElement} [removedChildTag] -
+ *     Removed element the filter is searching for
+ * @property {String} changedAttribute - Name of the changed attribute the filter is searching for
+ * @property {String} characterData - Text content that the filter is searching for
+ */
+
+/**
+ * HTML/XML mutation filter
+ * 
+ * @param {MutationFilterConfig} config - Filter configuration
+ */
 function MutationFilter(config)
 {
     this.target = config.target;
@@ -28,6 +53,16 @@ function MutationFilter(config)
     this.characterData = config.text;
 }
 
+/**
+ * Filter callback function for Mutation Observer
+ * @external MutationObserver
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver MutationObserver}
+ * 
+ * @param {Object} mutations - Array of mutation records
+ * @returns {Element|NodeAttribute|TextNode} In case the filter is searching for an element the
+ *     element is returned, in case a changed attribute is searched the attribute is returned, and
+ *     in case a text is searched a text node is returned
+ */
 MutationFilter.prototype.filter = function(mutations)
 {
     function getMatchingNode(mutatedNodes, checkedTag)
@@ -61,20 +96,14 @@ MutationFilter.prototype.filter = function(mutations)
                 {
                     var matchingNode = getMatchingNode(mutation.addedNodes, this.addedChildTag);
                     if (matchingNode)
-                    {
-                        this.handler(matchingNode);
-                        return;
-                    }
+                        return matchingNode;
                 }
                 else if (this.removedChildTag && mutation.removedNodes.length !== 0)
                 {
                     var matchingNode = getMatchingNode(mutation.removedNodes,
                         this.removedChildTag);
                     if (matchingNode)
-                    {
-                        this.handler(matchingNode);
-                        return;
-                    }
+                        return matchingNode;
                 }
                 continue;
                 break;
@@ -85,10 +114,7 @@ MutationFilter.prototype.filter = function(mutations)
 
                 if (mutation.target === this.target &&
                     mutation.attributeName === this.changedAttribute)
-                {
-                    this.handler(mutation.target.attributes[mutation.attributeName]);
-                    return;
-                }
+                    return mutation.target.attributes[mutation.attributeName];
                 break;
 
             case "characterData":
@@ -96,15 +122,16 @@ MutationFilter.prototype.filter = function(mutations)
                     continue;
 
                 if (mutation.target.data === this.characterData)
-                {
-                    this.handler(mutation.target);
-                    return;
-                }
+                    return mutation.target;
                 break;
         }
     }
 };
 
+/**
+ * Returns the mutation filter configuration as string
+ * @returns {String} Filter configuration string
+ */
 MutationFilter.prototype.getDescription = function()
 {
     var obj = {

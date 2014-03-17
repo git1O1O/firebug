@@ -8,16 +8,11 @@
 
 /**
  * This object is intended for handling HTML changes that can occur on a page.
- * This is useful e.g. in cases when a test expects specific element to be created and
+ * This is useful e.g. in cases when a test expects a specific element to be created and
  * wants to asynchronously wait for it.
- * @param {Window} win Parent window.
- * @param {String} tagName Name of the element.
- * @param {Object} attributes List of attributes that identifies the element.
- * @param {String} text Specific text that should be created. The tagName must be set to
- * @param {Object} attributes to be watched, defaults to 'attributes'; use for removals
- * <i>Text</i> in this case.
- *
- * @class
+ * 
+ * @param {MutationFilterConfig} config -
+ *     [Mutation filter configuration]{@link MutationFilterConfig}
  */
 var MutationRecognizer = function(config)
 {
@@ -25,15 +20,26 @@ var MutationRecognizer = function(config)
     this.mutationFilter = new MutationFilter(config);
 };
 
+/**
+ * Returns the mutation filter configuration as string
+ * @returns {String} Filter configuration string
+ */
 MutationRecognizer.prototype.getDescription = function()
 {
-    return mutationFilter.getDescription();
+    return this.mutationFilter.getDescription();
 };
 
 /**
- * Passes a callback handler that is called when specific HTML change
- * occurs on the page.
- * @param {Function} handler Callback handler gets one parameter specifying the founded element.
+ * Mutation callback function
+ * 
+ * @callback MutationRecognizer~mutationCallback
+ * @param {Object} node - Recognized node; can be an element or character data
+ */
+
+/**
+ * Recognizes specific HTML/XML structure changes and calls a callback function synchronously.
+ * 
+ * @param {mutationCallback} handler - Callback function that handles the found node.
  */
 MutationRecognizer.prototype.onRecognize = function(handler)
 {
@@ -42,11 +48,10 @@ MutationRecognizer.prototype.onRecognize = function(handler)
 };
 
 /**
- * Passes a callback handler that is called when specific HTML change
- * occurs on the page. After the change is caught, the handler is executed yet
- * asynchronously.
- * @param {Function} handler Callback handler gets one parameter specifying the founded element.
- * @delay {Number} delay Number of milliseconds delay (10ms by default).
+ * Recognizes specific HTML/XML structure changes and calls a callback function asynchronously.
+ * 
+ * @param {mutationCallback} handler - Callback function that handles the found node.
+ * @delay {Number} [delay=10] - Number of milliseconds to wait before the callback function is called.
  */
 MutationRecognizer.prototype.onRecognizeAsync = function(handler, delay)
 {
@@ -55,14 +60,23 @@ MutationRecognizer.prototype.onRecognizeAsync = function(handler, delay)
 
     this.mutationFilter.handler = function(node)
     {
-        setTimeout(function delayMutationEventFilter()
+        setTimeout(function delayMutationFilter()
         {
-            FBTest.sysout("testFirebug.MutationEventFilter.onRecognizeAsync:", node);
+            FBTest.sysout("testFirebug.MutationFilter.onRecognizeAsync:", node);
             handler(node);
         }, delay);
     };
 
-    var observer = new MutationObserver(this.mutationFilter.filter);
+    var observer = new MutationObserver((mutations) =>
+    {
+        var node = this.mutationFilter.filter(mutations);
+        FBTrace.sysout("node", node);
+        if (node)
+        {
+            observer.disconnect();
+            handler(node);
+        }
+    });
     var config = {};
     if (this.mutationFilter.addedChildTag || this.mutationFilter.removedChildTag)
     {
@@ -79,6 +93,5 @@ MutationRecognizer.prototype.onRecognizeAsync = function(handler, delay)
         config.characterData = true;
     }
 
-    FBTrace.sysout("this.target", {target: this.target, config: config});
     observer.observe(this.target, config);
 };
