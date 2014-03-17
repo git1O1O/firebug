@@ -77,7 +77,8 @@ MutationFilter.prototype.filter = function(mutations)
 
             if (checkedTag.name !== mutatedNodes[i].localName)
             {
-                var node = getMatchingNode(mutatedNodes[i].querySelectorAll(checkedTag.name), checkedTag);
+                var node = getMatchingNode(mutatedNodes[i].querySelectorAll(checkedTag.name),
+                    checkedTag);
                 if (node)
                     return node;
                 else
@@ -96,11 +97,15 @@ MutationFilter.prototype.filter = function(mutations)
                 }
                 else if (attributeName === "class")
                 {
-                    if (attribute.value.split(" ").
-                        indexOf(checkedTag.attributes[attributeName]) === -1)
+                    var checkedClassNames = checkedTag.attributes[attributeName].split(" ");
+                    var classList = mutatedNodes[i].classList;
+                    for (var j = 0; j < checkedClassNames.length; j++)
                     {
-                        attributesMatch = false;
-                        break;
+                        if (!classList.contains(checkedClassNames[j]))
+                        {
+                            attributesMatch = false;
+                            break;
+                        }
                     }
                 }
                 else if (attribute.value !== checkedTag.attributes[attributeName])
@@ -113,7 +118,8 @@ MutationFilter.prototype.filter = function(mutations)
             if (!attributesMatch)
             {
                 // Check the child elements for the searched element
-                var node = getMatchingNode(mutatedNodes[i].querySelectorAll(checkedTag.name), checkedTag);
+                var node = getMatchingNode(mutatedNodes[i].querySelectorAll(checkedTag.name),
+                    checkedTag);
                 if (node)
                     return node;
                 else
