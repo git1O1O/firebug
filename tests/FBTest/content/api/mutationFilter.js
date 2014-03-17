@@ -67,17 +67,57 @@ MutationFilter.prototype.filter = function(mutations)
 {
     function getMatchingNode(mutatedNodes, checkedTag)
     {
+        if (!mutatedNodes || mutatedNodes.length === 0)
+            return null;
+
         for (var i = 0; i < mutatedNodes.length; i++)
         {
-            if (checkedTag.name !== mutatedNodes[i].localName)
+            if (mutatedNodes[i].nodeType !== Node.ELEMENT_NODE)
                 continue;
+
+            if (checkedTag.name !== mutatedNodes[i].localName)
+            {
+                var node = getMatchingNode(mutatedNodes[i].querySelectorAll(checkedTag.name), checkedTag);
+                if (node)
+                    return node;
+                else
+                    continue;
+            }
 
             var attributes = mutatedNodes[i].attributes;
             for (var attributeName in checkedTag.attributes)
             {
                 var attribute = attributes.getNamedItem(attributeName);
-                if (!attribute || attribute.value !== checkedTag.attributes[attributeName])
-                    return null;
+                var attributesMatch = true;
+                if (!attribute)
+                {
+                    attributesMatch = false;
+                    break;
+                }
+                else if (attributeName === "class")
+                {
+                    if (attribute.value.split(" ").
+                        indexOf(checkedTag.attributes[attributeName]) === -1)
+                    {
+                        attributesMatch = false;
+                        break;
+                    }
+                }
+                else if (attribute.value !== checkedTag.attributes[attributeName])
+                {
+                    attributesMatch = false;
+                    break;
+                }
+            }
+
+            if (!attributesMatch)
+            {
+                // Check the child elements for the searched element
+                var node = getMatchingNode(mutatedNodes[i].querySelectorAll(checkedTag.name), checkedTag);
+                if (node)
+                    return node;
+                else
+                    continue;
             }
 
             return mutatedNodes[i];
@@ -129,17 +169,43 @@ MutationFilter.prototype.filter = function(mutations)
 };
 
 /**
+ * Returns the Mutation Observer configuration for the mutation filter
+ * @returns {Object} Mutation Observer configuration
+ */
+MutationFilter.prototype.getMutationObserverConfig = function()
+{
+    var config = {};
+    if (this.addedChildTag || this.removedChildTag)
+    {
+        config.childList = true;
+        config.subtree = true;
+    }
+    else if (this.changedAttribute)
+    {
+        config.attributes = true;
+        config.attributeFilter = [this.changedAttribute];
+    }
+    else if (this.characterData)
+    {
+        config.characterData = true;
+    }
+
+    return config;
+};
+
+/**
  * Returns the mutation filter configuration as string
  * @returns {String} Filter configuration string
  */
 MutationFilter.prototype.getDescription = function()
 {
+    FBTrace.sysout("getDescription");
     var obj = {
         target: this.target.localName + (this.target.id ? "#" + this.target.id : ""),
         attributes: this.attributes,
         characterData: this.characterData,
         changedAttributes: this.changedAttributes,
     };
-
+    
     return JSON.stringify(obj);
 };

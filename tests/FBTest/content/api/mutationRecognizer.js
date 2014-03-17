@@ -43,8 +43,19 @@ MutationRecognizer.prototype.getDescription = function()
  */
 MutationRecognizer.prototype.onRecognize = function(handler)
 {
-    this.mutationFilter.handler = handler;
-    return new MutationObserver(this.mutationFilter.filter);
+    var self = this;
+    var observer = new MutationObserver((mutations) =>
+    {
+        var node = self.mutationFilter.filter(mutations);
+        FBTest.sysout("FBTest.MutationRecognizer.onRecognizeAsync:", node);
+        if (node)
+        {
+            observer.disconnect();
+            handler(node);
+        }
+    });
+
+    observer.observe(this.target, this.mutationFilter.getMutationObserverConfig());
 };
 
 /**
@@ -58,40 +69,20 @@ MutationRecognizer.prototype.onRecognizeAsync = function(handler, delay)
     if (!delay)
         delay = 10;
 
-    this.mutationFilter.handler = function(node)
+    var self = this;
+    var observer = new MutationObserver((mutations) =>
     {
         setTimeout(function delayMutationFilter()
         {
-            FBTest.sysout("testFirebug.MutationFilter.onRecognizeAsync:", node);
-            handler(node);
+            var node = self.mutationFilter.filter(mutations);
+            FBTest.sysout("FBTest.MutationRecognizer.onRecognizeAsync:", node);
+            if (node)
+            {
+                observer.disconnect();
+                handler(node);
+            }
         }, delay);
-    };
-
-    var observer = new MutationObserver((mutations) =>
-    {
-        var node = this.mutationFilter.filter(mutations);
-        FBTrace.sysout("node", node);
-        if (node)
-        {
-            observer.disconnect();
-            handler(node);
-        }
     });
-    var config = {};
-    if (this.mutationFilter.addedChildTag || this.mutationFilter.removedChildTag)
-    {
-        config.childList = true;
-        config.subtree = true;
-    }
-    else if (this.mutationFilter.changedAttribute)
-    {
-        config.attributes = true;
-        config.attributeFilter = [this.mutationFilter.changedAttribute];
-    }
-    else if (this.mutationFilter.characterData)
-    {
-        config.characterData = true;
-    }
 
-    observer.observe(this.target, config);
+    observer.observe(this.target, this.mutationFilter.getMutationObserverConfig());
 };
