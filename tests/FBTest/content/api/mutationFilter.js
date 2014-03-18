@@ -51,6 +51,8 @@ function MutationFilter(config)
     }
     this.changedAttribute = config.changedAttribute;
     this.characterData = config.text;
+
+    this.xpath = this.createXPath();
 }
 
 /**
@@ -65,15 +67,19 @@ function MutationFilter(config)
  */
 MutationFilter.prototype.filter = function(mutations)
 {
-    function getMatchingNode(mutatedNodes, checkedTag)
+    function getMatchingNode(mutatedNodes, checkedTag, checkedText)
     {
         if (!mutatedNodes || mutatedNodes.length === 0)
             return null;
 
-        FBTrace.sysout("mutatedNodes", mutatedNodes);
-
         for (var i = 0; i < mutatedNodes.length; i++)
         {
+            if (checkedText)
+            {
+                if (mutatedNodes[i].textContent.indexOf(checkedText) === -1)
+                    continue;
+            }
+
             if (mutatedNodes[i].nodeType !== Node.ELEMENT_NODE)
                 continue;
 
@@ -128,12 +134,6 @@ MutationFilter.prototype.filter = function(mutations)
                     continue;
             }
 
-            if (this.characterData)
-            {
-                if (mutatedNodes[i].textContent.indexOf(this.characterData) === -1)
-                    continue;
-            }
-
             return mutatedNodes[i];
         }
 
@@ -148,7 +148,8 @@ MutationFilter.prototype.filter = function(mutations)
             case "childList":
                 if (this.addedChildTag && mutation.addedNodes.length !== 0)
                 {
-                    var matchingNode = getMatchingNode(mutation.addedNodes, this.addedChildTag);
+                    var matchingNode = getMatchingNode(mutation.addedNodes, this.addedChildTag,
+                        this.characterData);
                     if (matchingNode)
                         return matchingNode;
                 }
@@ -168,7 +169,7 @@ MutationFilter.prototype.filter = function(mutations)
 
                 if (mutation.target === this.target &&
                     mutation.attributeName === this.changedAttribute)
-                    return mutation.target.attributes[mutation.attributeName];
+                    return mutation.target;
                 break;
 
             case "characterData":
@@ -212,7 +213,6 @@ MutationFilter.prototype.getMutationObserverConfig = function()
  */
 MutationFilter.prototype.getDescription = function()
 {
-    FBTrace.sysout("getDescription");
     var obj = {
         target: this.target.localName + (this.target.id ? "#" + this.target.id : ""),
         attributes: this.attributes,
@@ -221,4 +221,42 @@ MutationFilter.prototype.getDescription = function()
     };
     
     return JSON.stringify(obj);
+};
+
+MutationFilter.prototype.createXPath = function ()
+{
+    function createAttributeString(attributes)
+    {
+        var attributeString = "";
+        for (name in attributes)
+            attributeString += "[@" + name + "='" + attributes[name] + "']";
+
+        return attributeString;
+    }
+
+    var xpath = "//";
+
+    if (this.addedChildTag)
+    {
+        xpath += this.addedChildTag.name +
+            createAttributeString(this.addedChildTag.attributes);
+    }
+    else if (this.removedChildTag)
+    {
+        xpath += this.removedChildTag.name +
+            createAttributeString(this.addedChildTag.attributes);
+    }
+    else
+    {
+        xpath += "*";
+    }
+
+    if (this.characterData)
+    {
+        xpath += "[contains(text(), '" + this.characterData + "')]";
+    }
+
+    var expression = this.target.ownerDocument.createExpression(xpath, null);
+    FBTrace.sysout("xpath", {xpath: xpath, expression: expression});
+    return expression;
 };
